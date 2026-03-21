@@ -1,0 +1,270 @@
+name: Continuous Integration
+
+on:
+  workflow_call:
+    inputs:
+      runner:
+        description: "Runner used for the install/build job"
+        required: false
+        type: string
+        default: "ubuntu-latest"
+      docker_runner:
+        description: "Runner used for the Docker job"
+        required: false
+        type: string
+        default: "ubuntu-latest"
+      working_directory:
+        description: "Directory where package manager commands should run"
+        required: false
+        type: string
+        default: "."
+      cache_dependency_path:
+        description: "Optional dependency lockfile path used for cache scoping"
+        required: false
+        type: string
+        default: ""
+      node_version:
+        description: "Node.js version"
+        required: false
+        type: string
+        default: "20"
+      package_manager:
+        description: "Package manager used by the project"
+        required: false
+        type: string
+        default: "pnpm"
+      pnpm_version:
+        description: "pnpm version when pnpm is used"
+        required: false
+        type: string
+        default: "10.9.0"
+      npm_version:
+        description: "Optional npm version override"
+        required: false
+        type: string
+        default: ""
+      install_cmd:
+        description: "Install command"
+        required: false
+        type: string
+        default: "pnpm install --frozen-lockfile"
+      build_cmd:
+        description: "Build command"
+        required: false
+        type: string
+        default: "pnpm build"
+      run_lint:
+        description: "Run lint stage"
+        required: false
+        type: boolean
+        default: false
+      lint_cmd:
+        description: "Lint command"
+        required: false
+        type: string
+        default: "pnpm lint"
+      run_test:
+        description: "Run test stage"
+        required: false
+        type: boolean
+        default: false
+      test_cmd:
+        description: "Test command"
+        required: false
+        type: string
+        default: "pnpm test"
+      run_additional:
+        description: "Run any extra project-specific stage"
+        required: false
+        type: boolean
+        default: false
+      additional_cmd:
+        description: "Additional command"
+        required: false
+        type: string
+        default: ""
+      node_options:
+        description: "Optional NODE_OPTIONS value for build/lint/test/additional commands"
+        required: false
+        type: string
+        default: ""
+      docker_enabled:
+        description: "Build and push Docker image"
+        required: false
+        type: boolean
+        default: true
+      build_on_pull_request:
+        description: "Also build/push Docker image on pull requests"
+        required: false
+        type: boolean
+        default: false
+      docker_context:
+        description: "Docker build context"
+        required: false
+        type: string
+        default: "."
+      dockerfile:
+        description: "Dockerfile path"
+        required: false
+        type: string
+        default: "./Dockerfile"
+      image_name:
+        description: "Logical image name; defaults to repository name"
+        required: false
+        type: string
+        default: ""
+      ecr_repository:
+        description: "ECR repository name; defaults to image_name"
+        required: false
+        type: string
+        default: ""
+      image_tag_prefix:
+        description: "Tag prefix used before the branch name"
+        required: false
+        type: string
+        default: "latest"
+      docker_platforms:
+        description: "Target Docker platforms"
+        required: false
+        type: string
+        default: "linux/amd64,linux/arm64"
+      docker_build_args:
+        description: "Additional docker buildx arguments"
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  integrate:
+    name: Install, Build and Verify
+    runs-on: ${{ inputs.runner }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ inputs.working_directory }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        if: ${{ inputs.package_manager == 'pnpm' }}
+        uses: pnpm/action-setup@v5
+        with:
+          version: ${{ inputs.pnpm_version }}
+
+      - name: Setup npm
+        if: ${{ inputs.package_manager == 'npm' && inputs.npm_version != '' }}
+        run: npm install --global npm@${{ inputs.npm_version }}
+
+      - name: Setup Node
+        if: ${{ inputs.cache_dependency_path == '' }}
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ inputs.node_version }}
+          cache: ${{ inputs.package_manager }}
+
+      - name: Setup Node with scoped cache
+        if: ${{ inputs.cache_dependency_path != '' }}
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ inputs.node_version }}
+          cache: ${{ inputs.package_manager }}
+          cache-dependency-path: ${{ inputs.cache_dependency_path }}
+
+      - name: Install
+        run: ${{ inputs.install_cmd }}
+
+      - name: Build
+        run: ${{ inputs.build_cmd }}
+        env:
+          NODE_OPTIONS: ${{ inputs.node_options }}
+
+      - name: Lint
+        if: ${{ inputs.run_lint && inputs.lint_cmd != '' }}
+        run: ${{ inputs.lint_cmd }}
+        env:
+          NODE_OPTIONS: ${{ inputs.node_options }}
+
+      - name: Test
+        if: ${{ inputs.run_test && inputs.test_cmd != '' }}
+        run: ${{ inputs.test_cmd }}
+        env:
+          NODE_OPTIONS: ${{ inputs.node_options }}
+
+      - name: Additional
+        if: ${{ inputs.run_additional && inputs.additional_cmd != '' }}
+        run: ${{ inputs.additional_cmd }}
+        env:
+          NODE_OPTIONS: ${{ inputs.node_options }}
+
+  docker:
+    name: Build Docker Image
+    needs: integrate
+    runs-on: ${{ inputs.docker_runner }}
+    if: ${{ inputs.docker_enabled && (github.event_name != 'pull_request' || inputs.build_on_pull_request) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Setup Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Load secrets from Bitwarden
+        id: bitwarden
+        uses: bitwarden/sm-action@v2.2.0
+        with:
+          access_token: ${{ secrets.BW_ACCESS_TOKEN }}
+          cloud_region: eu
+          secrets: |
+            e7c6fc64-87b1-45dd-9420-b41400a2e518 > AWS_ACCESS_KEY_ID
+            e2765187-2097-4382-bbc3-b41400a2f529 > AWS_SECRET_ACCESS_KEY
+            238f1f37-baac-4158-b673-b41400a30d2f > AWS_REGION
+            d49acdfd-f59d-4260-ba03-b41400a2d594 > AWS_ECR_REGISTRY
+
+      - name: Resolve Docker metadata
+        id: meta
+        shell: bash
+        run: |
+          repo_name="${GITHUB_REPOSITORY#*/}"
+          image_name="${{ inputs.image_name }}"
+          ecr_repository="${{ inputs.ecr_repository }}"
+          ecr_registry="${{ steps.bitwarden.outputs.AWS_ECR_REGISTRY }}"
+          aws_region="${{ steps.bitwarden.outputs.AWS_REGION }}"
+
+          if [ -z "$image_name" ]; then
+            image_name="$repo_name"
+          fi
+
+          if [ -z "$ecr_repository" ]; then
+            ecr_repository="$image_name"
+          fi
+
+          echo "image_name=$image_name" >> "$GITHUB_OUTPUT"
+          echo "ecr_repository=$ecr_repository" >> "$GITHUB_OUTPUT"
+          echo "ecr_registry=$ecr_registry" >> "$GITHUB_OUTPUT"
+          echo "aws_region=$aws_region" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-access-key-id: ${{ steps.bitwarden.outputs.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ steps.bitwarden.outputs.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ steps.meta.outputs.aws_region }}
+
+      - name: Login to AWS ECR
+        uses: aws-actions/amazon-ecr-login@v2
+        with:
+          mask-password: "true"
+
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ inputs.docker_context }}
+          file: ${{ inputs.dockerfile }}
+          platforms: ${{ inputs.docker_platforms }}
+          push: true
+          tags: ${{ steps.meta.outputs.ecr_registry }}/${{ steps.meta.outputs.ecr_repository }}:${{ inputs.image_tag_prefix }}-${{ github.ref_name }}
+          build-args: ${{ inputs.docker_build_args }}

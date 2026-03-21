@@ -1,0 +1,388 @@
+name: Continuous Integration Dual
+
+on:
+  workflow_call:
+    inputs:
+      runner:
+        description: "Runner used for detection and install/build jobs"
+        required: false
+        type: string
+        default: "ubuntu-latest"
+      docker_runner:
+        description: "Runner used for Docker jobs"
+        required: false
+        type: string
+        default: "ubuntu-latest"
+      detect_changes:
+        description: "Run only for changed backend/frontend paths"
+        required: false
+        type: boolean
+        default: true
+      backend_enabled:
+        description: "Enable backend pipeline"
+        required: false
+        type: boolean
+        default: true
+      frontend_enabled:
+        description: "Enable frontend pipeline"
+        required: false
+        type: boolean
+        default: true
+      backend_path_filter:
+        description: "Path filter for backend changes"
+        required: false
+        type: string
+        default: "backend/**"
+      frontend_path_filter:
+        description: "Path filter for frontend changes"
+        required: false
+        type: string
+        default: "frontend/**"
+      node_version:
+        description: "Node.js version used by both targets"
+        required: false
+        type: string
+        default: "20"
+      package_manager:
+        description: "Package manager used by both targets"
+        required: false
+        type: string
+        default: "pnpm"
+      pnpm_version:
+        description: "pnpm version when pnpm is used"
+        required: false
+        type: string
+        default: "10.9.0"
+      npm_version:
+        description: "Optional npm version override"
+        required: false
+        type: string
+        default: ""
+      build_on_pull_request:
+        description: "Also build/push Docker images on pull requests"
+        required: false
+        type: boolean
+        default: false
+      docker_platforms:
+        description: "Target Docker platforms"
+        required: false
+        type: string
+        default: "linux/amd64,linux/arm64"
+      backend_working_directory:
+        description: "Backend working directory"
+        required: false
+        type: string
+        default: "backend"
+      backend_cache_dependency_path:
+        description: "Optional backend dependency lockfile path used for cache scoping"
+        required: false
+        type: string
+        default: "backend/pnpm-lock.yaml"
+      backend_install_cmd:
+        description: "Backend install command"
+        required: false
+        type: string
+        default: "pnpm install --frozen-lockfile"
+      backend_build_cmd:
+        description: "Backend build command"
+        required: false
+        type: string
+        default: "pnpm build"
+      backend_run_lint:
+        description: "Run backend lint stage"
+        required: false
+        type: boolean
+        default: false
+      backend_lint_cmd:
+        description: "Backend lint command"
+        required: false
+        type: string
+        default: "pnpm lint"
+      backend_run_test:
+        description: "Run backend test stage"
+        required: false
+        type: boolean
+        default: false
+      backend_test_cmd:
+        description: "Backend test command"
+        required: false
+        type: string
+        default: "pnpm test"
+      backend_run_additional:
+        description: "Run backend additional stage"
+        required: false
+        type: boolean
+        default: false
+      backend_additional_cmd:
+        description: "Backend additional command"
+        required: false
+        type: string
+        default: ""
+      backend_node_options:
+        description: "Optional backend NODE_OPTIONS value"
+        required: false
+        type: string
+        default: ""
+      backend_docker_enabled:
+        description: "Build and push backend Docker image"
+        required: false
+        type: boolean
+        default: true
+      backend_docker_context:
+        description: "Backend Docker build context"
+        required: false
+        type: string
+        default: "backend"
+      backend_dockerfile:
+        description: "Backend Dockerfile path"
+        required: false
+        type: string
+        default: "backend/Dockerfile"
+      backend_image_name:
+        description: "Backend logical image name; defaults to repo-backend"
+        required: false
+        type: string
+        default: ""
+      backend_ecr_repository:
+        description: "Backend ECR repository name; defaults to backend_image_name"
+        required: false
+        type: string
+        default: ""
+      backend_image_tag_prefix:
+        description: "Backend tag prefix used before the branch name"
+        required: false
+        type: string
+        default: "latest"
+      backend_docker_build_args:
+        description: "Additional backend docker buildx arguments"
+        required: false
+        type: string
+        default: ""
+      frontend_working_directory:
+        description: "Frontend working directory"
+        required: false
+        type: string
+        default: "frontend"
+      frontend_cache_dependency_path:
+        description: "Optional frontend dependency lockfile path used for cache scoping"
+        required: false
+        type: string
+        default: "frontend/pnpm-lock.yaml"
+      frontend_install_cmd:
+        description: "Frontend install command"
+        required: false
+        type: string
+        default: "pnpm install --frozen-lockfile"
+      frontend_build_cmd:
+        description: "Frontend build command"
+        required: false
+        type: string
+        default: "pnpm build"
+      frontend_run_lint:
+        description: "Run frontend lint stage"
+        required: false
+        type: boolean
+        default: false
+      frontend_lint_cmd:
+        description: "Frontend lint command"
+        required: false
+        type: string
+        default: "pnpm lint"
+      frontend_run_test:
+        description: "Run frontend test stage"
+        required: false
+        type: boolean
+        default: false
+      frontend_test_cmd:
+        description: "Frontend test command"
+        required: false
+        type: string
+        default: "pnpm test"
+      frontend_run_additional:
+        description: "Run frontend additional stage"
+        required: false
+        type: boolean
+        default: false
+      frontend_additional_cmd:
+        description: "Frontend additional command"
+        required: false
+        type: string
+        default: ""
+      frontend_node_options:
+        description: "Optional frontend NODE_OPTIONS value"
+        required: false
+        type: string
+        default: ""
+      frontend_docker_enabled:
+        description: "Build and push frontend Docker image"
+        required: false
+        type: boolean
+        default: true
+      frontend_docker_context:
+        description: "Frontend Docker build context"
+        required: false
+        type: string
+        default: "frontend"
+      frontend_dockerfile:
+        description: "Frontend Dockerfile path"
+        required: false
+        type: string
+        default: "frontend/Dockerfile"
+      frontend_image_name:
+        description: "Frontend logical image name; defaults to repo-frontend"
+        required: false
+        type: string
+        default: ""
+      frontend_ecr_repository:
+        description: "Frontend ECR repository name; defaults to frontend_image_name"
+        required: false
+        type: string
+        default: ""
+      frontend_image_tag_prefix:
+        description: "Frontend tag prefix used before the branch name"
+        required: false
+        type: string
+        default: "latest"
+      frontend_docker_build_args:
+        description: "Additional frontend docker buildx arguments"
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  detect:
+    name: Detect Changes
+    runs-on: ${{ inputs.runner }}
+    outputs:
+      backend: ${{ steps.resolve.outputs.backend }}
+      frontend: ${{ steps.resolve.outputs.frontend }}
+      backend_image_name: ${{ steps.resolve.outputs.backend_image_name }}
+      frontend_image_name: ${{ steps.resolve.outputs.frontend_image_name }}
+    steps:
+      - name: Checkout
+        if: ${{ inputs.detect_changes }}
+        uses: actions/checkout@v6
+
+      - name: Detect changed paths
+        id: changes
+        if: ${{ inputs.detect_changes }}
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            backend:
+              - '${{ inputs.backend_path_filter }}'
+            frontend:
+              - '${{ inputs.frontend_path_filter }}'
+
+      - name: Resolve targets
+        id: resolve
+        shell: bash
+        env:
+          DETECT_CHANGES: ${{ inputs.detect_changes }}
+          BACKEND_ENABLED: ${{ inputs.backend_enabled }}
+          FRONTEND_ENABLED: ${{ inputs.frontend_enabled }}
+          BACKEND_CHANGED: ${{ steps.changes.outputs.backend }}
+          FRONTEND_CHANGED: ${{ steps.changes.outputs.frontend }}
+        run: |
+          repo_name="${GITHUB_REPOSITORY#*/}"
+
+          backend_image_name="${{ inputs.backend_image_name }}"
+          frontend_image_name="${{ inputs.frontend_image_name }}"
+
+          if [ -z "$backend_image_name" ]; then
+            backend_image_name="$repo_name-backend"
+          fi
+
+          if [ -z "$frontend_image_name" ]; then
+            frontend_image_name="$repo_name-frontend"
+          fi
+
+          backend="$BACKEND_ENABLED"
+          frontend="$FRONTEND_ENABLED"
+
+          if [ "$DETECT_CHANGES" = "true" ]; then
+            if [ "$BACKEND_ENABLED" = "true" ] && [ "$BACKEND_CHANGED" = "true" ]; then
+              backend="true"
+            else
+              backend="false"
+            fi
+
+            if [ "$FRONTEND_ENABLED" = "true" ] && [ "$FRONTEND_CHANGED" = "true" ]; then
+              frontend="true"
+            else
+              frontend="false"
+            fi
+          fi
+
+          echo "backend=$backend" >> "$GITHUB_OUTPUT"
+          echo "frontend=$frontend" >> "$GITHUB_OUTPUT"
+          echo "backend_image_name=$backend_image_name" >> "$GITHUB_OUTPUT"
+          echo "frontend_image_name=$frontend_image_name" >> "$GITHUB_OUTPUT"
+
+  backend:
+    name: Backend CI
+    needs: detect
+    if: ${{ needs.detect.outputs.backend == 'true' }}
+    uses: ./.github/workflows/node-ci.yml
+    secrets: inherit
+    with:
+      runner: ${{ inputs.runner }}
+      docker_runner: ${{ inputs.docker_runner }}
+      working_directory: ${{ inputs.backend_working_directory }}
+      cache_dependency_path: ${{ inputs.backend_cache_dependency_path }}
+      node_version: ${{ inputs.node_version }}
+      package_manager: ${{ inputs.package_manager }}
+      pnpm_version: ${{ inputs.pnpm_version }}
+      npm_version: ${{ inputs.npm_version }}
+      install_cmd: ${{ inputs.backend_install_cmd }}
+      build_cmd: ${{ inputs.backend_build_cmd }}
+      run_lint: ${{ inputs.backend_run_lint }}
+      lint_cmd: ${{ inputs.backend_lint_cmd }}
+      run_test: ${{ inputs.backend_run_test }}
+      test_cmd: ${{ inputs.backend_test_cmd }}
+      run_additional: ${{ inputs.backend_run_additional }}
+      additional_cmd: ${{ inputs.backend_additional_cmd }}
+      node_options: ${{ inputs.backend_node_options }}
+      docker_enabled: ${{ inputs.backend_docker_enabled }}
+      build_on_pull_request: ${{ inputs.build_on_pull_request }}
+      docker_context: ${{ inputs.backend_docker_context }}
+      dockerfile: ${{ inputs.backend_dockerfile }}
+      image_name: ${{ needs.detect.outputs.backend_image_name }}
+      ecr_repository: ${{ inputs.backend_ecr_repository }}
+      image_tag_prefix: ${{ inputs.backend_image_tag_prefix }}
+      docker_platforms: ${{ inputs.docker_platforms }}
+      docker_build_args: ${{ inputs.backend_docker_build_args }}
+
+  frontend:
+    name: Frontend CI
+    needs: detect
+    if: ${{ needs.detect.outputs.frontend == 'true' }}
+    uses: ./.github/workflows/node-ci.yml
+    secrets: inherit
+    with:
+      runner: ${{ inputs.runner }}
+      docker_runner: ${{ inputs.docker_runner }}
+      working_directory: ${{ inputs.frontend_working_directory }}
+      cache_dependency_path: ${{ inputs.frontend_cache_dependency_path }}
+      node_version: ${{ inputs.node_version }}
+      package_manager: ${{ inputs.package_manager }}
+      pnpm_version: ${{ inputs.pnpm_version }}
+      npm_version: ${{ inputs.npm_version }}
+      install_cmd: ${{ inputs.frontend_install_cmd }}
+      build_cmd: ${{ inputs.frontend_build_cmd }}
+      run_lint: ${{ inputs.frontend_run_lint }}
+      lint_cmd: ${{ inputs.frontend_lint_cmd }}
+      run_test: ${{ inputs.frontend_run_test }}
+      test_cmd: ${{ inputs.frontend_test_cmd }}
+      run_additional: ${{ inputs.frontend_run_additional }}
+      additional_cmd: ${{ inputs.frontend_additional_cmd }}
+      node_options: ${{ inputs.frontend_node_options }}
+      docker_enabled: ${{ inputs.frontend_docker_enabled }}
+      build_on_pull_request: ${{ inputs.build_on_pull_request }}
+      docker_context: ${{ inputs.frontend_docker_context }}
+      dockerfile: ${{ inputs.frontend_dockerfile }}
+      image_name: ${{ needs.detect.outputs.frontend_image_name }}
+      ecr_repository: ${{ inputs.frontend_ecr_repository }}
+      image_tag_prefix: ${{ inputs.frontend_image_tag_prefix }}
+      docker_platforms: ${{ inputs.docker_platforms }}
+      docker_build_args: ${{ inputs.frontend_docker_build_args }}
