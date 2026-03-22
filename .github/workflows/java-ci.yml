@@ -1,10 +1,10 @@
-name: Continuous Integration - Node
+name: Continuous Integration - Java
 
 on:
   workflow_call:
     inputs:
       runner:
-        description: "Runner used for the install/build job"
+        description: "Runner used for the build/verify job"
         required: false
         type: string
         default: "ubuntu-latest"
@@ -14,67 +14,52 @@ on:
         type: string
         default: "ubuntu-latest"
       working_directory:
-        description: "Directory where package manager commands should run"
+        description: "Directory where Java commands should run"
         required: false
         type: string
         default: "."
-      cache_dependency_path:
-        description: "Optional dependency lockfile path used for cache scoping"
+      java_version:
+        description: "Java version"
         required: false
         type: string
-        default: ""
-      node_version:
-        description: "Node.js version"
+        default: "21"
+      java_distribution:
+        description: "Java distribution"
         required: false
         type: string
-        default: "20"
-      package_manager:
-        description: "Package manager used by the project"
+        default: "temurin"
+      java_cache:
+        description: "Dependency cache type for setup-java"
         required: false
         type: string
-        default: "pnpm"
-      pnpm_version:
-        description: "pnpm version when pnpm is used"
-        required: false
-        type: string
-        default: "10.9.0"
-      npm_version:
-        description: "Optional npm version override"
-        required: false
-        type: string
-        default: ""
-      install_cmd:
-        description: "Install command"
-        required: false
-        type: string
-        default: "pnpm install --frozen-lockfile"
+        default: "maven"
       build_cmd:
         description: "Build command"
         required: false
         type: string
-        default: "pnpm build"
-      run_lint:
-        description: "Run lint stage"
+        default: "mvn -B -q compile"
+      run_verify:
+        description: "Run code quality/verification stage"
         required: false
         type: boolean
         default: false
-      lint_cmd:
-        description: "Lint command"
+      verify_cmd:
+        description: "Verification command"
         required: false
         type: string
-        default: "pnpm lint"
+        default: "mvn -B -q verify -DskipTests"
       run_test:
         description: "Run test stage"
         required: false
         type: boolean
-        default: false
+        default: true
       test_cmd:
         description: "Test command"
         required: false
         type: string
-        default: "pnpm test"
+        default: "mvn -B test"
       run_additional:
-        description: "Run any extra project-specific stage"
+        description: "Run an additional project-specific stage"
         required: false
         type: boolean
         default: false
@@ -83,18 +68,13 @@ on:
         required: false
         type: string
         default: ""
-      node_options:
-        description: "Optional NODE_OPTIONS value for build/lint/test/additional commands"
-        required: false
-        type: string
-        default: ""
       docker_enabled:
-        description: "Build and push Docker image"
+        description: "Build Docker image"
         required: false
         type: boolean
         default: true
       build_on_pull_request:
-        description: "Also build/push Docker image on pull requests"
+        description: "Also build Docker image on pull requests"
         required: false
         type: boolean
         default: false
@@ -104,12 +84,12 @@ on:
         type: string
         default: "."
       dockerfile:
-        description: "Dockerfile path"
+        description: "Dockerfile path relative to repository root"
         required: false
         type: string
-        default: "./Dockerfile"
+        default: "Dockerfile"
       image_name:
-        description: "Logical image name; defaults to repository name"
+        description: "Docker image name used for generated tags"
         required: false
         type: string
         default: ""
@@ -123,20 +103,60 @@ on:
         required: false
         type: string
         default: "latest"
-      docker_platforms:
-        description: "Target Docker platforms"
+      package_cmd:
+        description: "Optional packaging command to run before Docker build"
         required: false
         type: string
-        default: "linux/amd64,linux/arm64"
+        default: ""
       docker_build_args:
         description: "Additional docker buildx arguments"
         required: false
         type: string
         default: ""
+      docker_platforms:
+        description: "Target Docker platforms"
+        required: false
+        type: string
+        default: "linux/amd64,linux/arm64"
+      docker_cache_from:
+        description: "Docker cache-from value"
+        required: false
+        type: string
+        default: "type=gha"
+      docker_cache_to:
+        description: "Docker cache-to value"
+        required: false
+        type: string
+        default: "type=gha,mode=max"
+      bw_cloud_region:
+        description: "Bitwarden cloud region"
+        required: false
+        type: string
+        default: "eu"
+      bw_aws_access_key_id_secret_id:
+        description: "Bitwarden secret ID for AWS access key ID"
+        required: false
+        type: string
+        default: "e7c6fc64-87b1-45dd-9420-b41400a2e518"
+      bw_aws_secret_access_key_secret_id:
+        description: "Bitwarden secret ID for AWS secret access key"
+        required: false
+        type: string
+        default: "e2765187-2097-4382-bbc3-b41400a2f529"
+      bw_aws_region_secret_id:
+        description: "Bitwarden secret ID for AWS region"
+        required: false
+        type: string
+        default: "238f1f37-baac-4158-b673-b41400a30d2f"
+      bw_aws_ecr_registry_secret_id:
+        description: "Bitwarden secret ID for AWS ECR registry"
+        required: false
+        type: string
+        default: "d49acdfd-f59d-4260-ba03-b41400a2d594"
 
 jobs:
   integrate:
-    name: Install, Build and Verify
+    name: Build and Verify
     runs-on: ${{ inputs.runner }}
     defaults:
       run:
@@ -146,56 +166,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Setup pnpm
-        if: ${{ inputs.package_manager == 'pnpm' }}
-        uses: pnpm/action-setup@v5
+      - name: Setup Java
+        uses: actions/setup-java@v5
         with:
-          version: ${{ inputs.pnpm_version }}
-
-      - name: Setup npm
-        if: ${{ inputs.package_manager == 'npm' && inputs.npm_version != '' }}
-        run: npm install --global npm@${{ inputs.npm_version }}
-
-      - name: Setup Node
-        if: ${{ inputs.cache_dependency_path == '' }}
-        uses: actions/setup-node@v6
-        with:
-          node-version: ${{ inputs.node_version }}
-          cache: ${{ inputs.package_manager }}
-
-      - name: Setup Node with scoped cache
-        if: ${{ inputs.cache_dependency_path != '' }}
-        uses: actions/setup-node@v6
-        with:
-          node-version: ${{ inputs.node_version }}
-          cache: ${{ inputs.package_manager }}
-          cache-dependency-path: ${{ inputs.cache_dependency_path }}
-
-      - name: Install
-        run: ${{ inputs.install_cmd }}
+          distribution: ${{ inputs.java_distribution }}
+          java-version: ${{ inputs.java_version }}
+          cache: ${{ inputs.java_cache }}
 
       - name: Build
         run: ${{ inputs.build_cmd }}
-        env:
-          NODE_OPTIONS: ${{ inputs.node_options }}
 
-      - name: Lint
-        if: ${{ inputs.run_lint && inputs.lint_cmd != '' }}
-        run: ${{ inputs.lint_cmd }}
-        env:
-          NODE_OPTIONS: ${{ inputs.node_options }}
+      - name: Verify
+        if: ${{ inputs.run_verify && inputs.verify_cmd != '' }}
+        run: ${{ inputs.verify_cmd }}
 
       - name: Test
         if: ${{ inputs.run_test && inputs.test_cmd != '' }}
         run: ${{ inputs.test_cmd }}
-        env:
-          NODE_OPTIONS: ${{ inputs.node_options }}
 
       - name: Additional
         if: ${{ inputs.run_additional && inputs.additional_cmd != '' }}
         run: ${{ inputs.additional_cmd }}
-        env:
-          NODE_OPTIONS: ${{ inputs.node_options }}
 
   docker:
     name: Build Docker Image
@@ -204,7 +195,21 @@ jobs:
     if: ${{ inputs.docker_enabled && (github.event_name != 'pull_request' || inputs.build_on_pull_request) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        if: ${{ inputs.package_cmd != '' }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: ${{ inputs.java_distribution }}
+          java-version: ${{ inputs.java_version }}
+          cache: ${{ inputs.java_cache }}
+
+      - name: Package
+        if: ${{ inputs.package_cmd != '' }}
+        shell: bash
+        working-directory: ${{ inputs.working_directory }}
+        run: ${{ inputs.package_cmd }}
 
       - name: Setup QEMU
         uses: docker/setup-qemu-action@v4
@@ -217,14 +222,14 @@ jobs:
         uses: bitwarden/sm-action@v2.2.0
         with:
           access_token: ${{ secrets.BW_ACCESS_TOKEN }}
-          cloud_region: eu
+          cloud_region: ${{ inputs.bw_cloud_region }}
           secrets: |
-            e7c6fc64-87b1-45dd-9420-b41400a2e518 > AWS_ACCESS_KEY_ID
-            e2765187-2097-4382-bbc3-b41400a2f529 > AWS_SECRET_ACCESS_KEY
-            238f1f37-baac-4158-b673-b41400a30d2f > AWS_REGION
-            d49acdfd-f59d-4260-ba03-b41400a2d594 > AWS_ECR_REGISTRY
+            ${{ inputs.bw_aws_access_key_id_secret_id }} > AWS_ACCESS_KEY_ID
+            ${{ inputs.bw_aws_secret_access_key_secret_id }} > AWS_SECRET_ACCESS_KEY
+            ${{ inputs.bw_aws_region_secret_id }} > AWS_REGION
+            ${{ inputs.bw_aws_ecr_registry_secret_id }} > AWS_ECR_REGISTRY
 
-      - name: Resolve Docker metadata
+      - name: Resolve Docker Metadata
         id: meta
         shell: bash
         run: |
@@ -242,10 +247,12 @@ jobs:
             ecr_repository="$image_name"
           fi
 
-          echo "image_name=$image_name" >> "$GITHUB_OUTPUT"
-          echo "ecr_repository=$ecr_repository" >> "$GITHUB_OUTPUT"
-          echo "ecr_registry=$ecr_registry" >> "$GITHUB_OUTPUT"
-          echo "aws_region=$aws_region" >> "$GITHUB_OUTPUT"
+          {
+            echo "image_name=$image_name"
+            echo "ecr_repository=$ecr_repository"
+            echo "ecr_registry=$ecr_registry"
+            echo "aws_region=$aws_region"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v6
@@ -268,3 +275,5 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.ecr_registry }}/${{ steps.meta.outputs.ecr_repository }}:${{ inputs.image_tag_prefix }}-${{ github.ref_name }}
           build-args: ${{ inputs.docker_build_args }}
+          cache-from: ${{ inputs.docker_cache_from }}
+          cache-to: ${{ inputs.docker_cache_to }}
