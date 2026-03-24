@@ -12,7 +12,7 @@ on:
         description: "Runner used for the Docker job"
         required: false
         type: string
-        default: "ubuntu-24.04-arm"
+        default: "ubuntu-latest"
       working_directory:
         description: "Directory where package manager commands should run"
         required: false
@@ -215,7 +215,7 @@ jobs:
 
       - name: Load secrets from Bitwarden
         id: bitwarden
-        uses: bitwarden/sm-action@v3.0.0-beta.4
+        uses: bitwarden/sm-action@v2.2.0
         with:
           access_token: ${{ secrets.BW_ACCESS_TOKEN }}
           cloud_region: eu
@@ -261,7 +261,7 @@ jobs:
           mask-password: "true"
 
       - name: Build and Push Docker Image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ${{ inputs.docker_context }}
           file: ${{ inputs.dockerfile }}
