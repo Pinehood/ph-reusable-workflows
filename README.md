@@ -1,6 +1,6 @@
 # Public Reusable Workflows
 
-This folder contains publicly available and safe-to-use GitHub reusable workflows.
+This folder contains publicly available and safe-to-use GitHub reusable workflows and actions.
 
 ## Example Consumer Workflow
 

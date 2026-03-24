@@ -133,10 +133,15 @@ on:
         required: false
         type: string
         default: ""
+      bw_docker_build_arg_secrets:
+        description: "Optional Bitwarden secret ID to Docker build arg name mappings, one per line: <secret-id> > <BUILD_ARG_NAME>"
+        required: false
+        type: string
+        default: ""
 
 jobs:
   integrate:
-    name: Install, Build and Verify
+    name: Install, Build & Verify
     runs-on: ${{ inputs.runner }}
     defaults:
       run:
@@ -146,24 +151,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Setup pnpm
+      - name: Setup PNPM
         if: ${{ inputs.package_manager == 'pnpm' }}
         uses: pnpm/action-setup@v5
         with:
           version: ${{ inputs.pnpm_version }}
 
-      - name: Setup npm
+      - name: Setup NPM
         if: ${{ inputs.package_manager == 'npm' && inputs.npm_version != '' }}
         run: npm install --global npm@${{ inputs.npm_version }}
 
-      - name: Setup Node
+      - name: Setup Node.js
         if: ${{ inputs.cache_dependency_path == '' }}
         uses: actions/setup-node@v6
         with:
           node-version: ${{ inputs.node_version }}
           cache: ${{ inputs.package_manager }}
 
-      - name: Setup Node with scoped cache
+      - name: Setup Cached Node.js
         if: ${{ inputs.cache_dependency_path != '' }}
         uses: actions/setup-node@v6
         with:
@@ -213,7 +218,7 @@ jobs:
       - name: Setup Buildx
         uses: docker/setup-buildx-action@v4
 
-      - name: Load secrets from Bitwarden
+      - name: Load Secrets
         id: bitwarden
         uses: bitwarden/sm-action@v2.2.0
         with:
@@ -224,8 +229,9 @@ jobs:
             e2765187-2097-4382-bbc3-b41400a2f529 > AWS_SECRET_ACCESS_KEY
             238f1f37-baac-4158-b673-b41400a30d2f > AWS_REGION
             d49acdfd-f59d-4260-ba03-b41400a2d594 > AWS_ECR_REGISTRY
+            ${{ inputs.bw_docker_build_arg_secrets }}
 
-      - name: Resolve Docker metadata
+      - name: Resolve Docker Metadata
         id: meta
         shell: bash
         run: |
@@ -260,7 +266,15 @@ jobs:
         with:
           mask-password: "true"
 
-      - name: Build and Push Docker Image
+      - name: Resolve Docker Build Args
+        id: build_args
+        uses: ./.github/actions/resolve-docker-build-args
+        with:
+          docker_build_args: ${{ inputs.docker_build_args }}
+          bw_docker_build_arg_secrets: ${{ inputs.bw_docker_build_arg_secrets }}
+          bw_outputs_json: ${{ toJson(steps.bitwarden.outputs) }}
+
+      - name: Build & Push Docker Image
         uses: docker/build-push-action@v7
         with:
           context: ${{ inputs.docker_context }}
@@ -268,4 +282,4 @@ jobs:
           platforms: ${{ inputs.docker_platforms }}
           push: true
           tags: ${{ steps.meta.outputs.ecr_registry }}/${{ steps.meta.outputs.ecr_repository }}:${{ inputs.image_tag_prefix }}-${{ github.ref_name }}
-          build-args: ${{ inputs.docker_build_args }}
+          build-args: ${{ steps.build_args.outputs.build_args }}

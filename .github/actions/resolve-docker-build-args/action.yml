@@ -1,0 +1,32 @@
+name: Resolve Docker Build Args
+
+inputs:
+  docker_build_args:
+    description: Additional docker buildx arguments
+    required: false
+    default: ""
+  bw_docker_build_arg_secrets:
+    description: Bitwarden secret ID to Docker build arg name mappings
+    required: false
+    default: ""
+  bw_outputs_json:
+    description: JSON object of Bitwarden step outputs
+    required: false
+    default: "{}"
+
+outputs:
+  build_args:
+    description: Final Docker build args
+    value: ${{ steps.resolve.outputs.build_args }}
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve Docker Build Args
+      id: resolve
+      shell: bash
+      run: python "$GITHUB_ACTION_PATH/script.py"
+      env:
+        DOCKER_BUILD_ARGS: ${{ inputs.docker_build_args }}
+        BW_DOCKER_BUILD_ARG_SECRETS: ${{ inputs.bw_docker_build_arg_secrets }}
+        BW_OUTPUTS_JSON: ${{ inputs.bw_outputs_json }}
