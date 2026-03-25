@@ -268,7 +268,7 @@ jobs:
 
       - name: Resolve Docker Build Args
         id: build_args
-        uses: ./.github/actions/resolve-docker-build-args
+        uses: Pinehood/ph-reusable-workflows/.github/actions/resolve-docker-build-args@main
         with:
           docker_build_args: ${{ inputs.docker_build_args }}
           bw_docker_build_arg_secrets: ${{ inputs.bw_docker_build_arg_secrets }}
