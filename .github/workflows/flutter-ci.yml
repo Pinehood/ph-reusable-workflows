@@ -1,0 +1,246 @@
+name: Continuous Integration - Flutter
+
+on:
+  workflow_call:
+    inputs:
+      runner:
+        description: "Runner used for the integrate job"
+        required: false
+        type: string
+        default: "ubuntu-latest"
+      android_runner:
+        description: "Runner used for the Android build job"
+        required: false
+        type: string
+        default: "ubuntu-latest"
+      ios_runner:
+        description: "Runner used for the iOS build job"
+        required: false
+        type: string
+        default: "macos-latest"
+      web_runner:
+        description: "Runner used for the Web build job"
+        required: false
+        type: string
+        default: "ubuntu-latest"
+      working_directory:
+        description: "Directory where Flutter commands should run"
+        required: false
+        type: string
+        default: "."
+      flutter_channel:
+        description: "Flutter SDK channel"
+        required: false
+        type: string
+        default: "stable"
+      flutter_cache:
+        description: "Enable Flutter action dependency cache"
+        required: false
+        type: boolean
+        default: true
+      java_version:
+        description: "Java version for Android builds"
+        required: false
+        type: string
+        default: "17"
+      java_distribution:
+        description: "Java distribution for Android builds"
+        required: false
+        type: string
+        default: "temurin"
+      run_flutter_doctor:
+        description: "Run flutter doctor -v on Android job"
+        required: false
+        type: boolean
+        default: true
+      run_analyze:
+        description: "Run static analysis"
+        required: false
+        type: boolean
+        default: true
+      analyze_cmd:
+        description: "Analyze command"
+        required: false
+        type: string
+        default: "flutter analyze"
+      run_test:
+        description: "Run tests"
+        required: false
+        type: boolean
+        default: false
+      test_cmd:
+        description: "Test command"
+        required: false
+        type: string
+        default: "flutter test"
+      build_web:
+        description: "Build web release"
+        required: false
+        type: boolean
+        default: true
+      web_build_cmd:
+        description: "Web build command"
+        required: false
+        type: string
+        default: "flutter build web --release"
+      build_apk:
+        description: "Build Android APK"
+        required: false
+        type: boolean
+        default: false
+      apk_build_cmd:
+        description: "APK build command"
+        required: false
+        type: string
+        default: "flutter build apk --release"
+      build_aab:
+        description: "Build Android App Bundle"
+        required: false
+        type: boolean
+        default: false
+      aab_build_cmd:
+        description: "AAB build command"
+        required: false
+        type: string
+        default: "flutter build appbundle --release"
+      build_ios:
+        description: "Build iOS IPA (no codesign)"
+        required: false
+        type: boolean
+        default: false
+      ios_pod_install:
+        description: "Run pod install under ios/"
+        required: false
+        type: boolean
+        default: true
+      ios_build_cmd:
+        description: "iOS build command"
+        required: false
+        type: string
+        default: "flutter build ipa --release --no-codesign"
+
+jobs:
+  integrate:
+    name: Integrate
+    runs-on: ${{ inputs.runner }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working_directory }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: ${{ inputs.flutter_channel }}
+          cache: ${{ inputs.flutter_cache }}
+
+      - name: Get packages
+        run: flutter pub get
+
+      - name: Analyze
+        if: ${{ inputs.run_analyze && inputs.analyze_cmd != '' }}
+        run: ${{ inputs.analyze_cmd }}
+
+      - name: Test
+        if: ${{ inputs.run_test && inputs.test_cmd != '' }}
+        run: ${{ inputs.test_cmd }}
+
+  android:
+    name: Android
+    runs-on: ${{ inputs.android_runner }}
+    needs: integrate
+    if: ${{ inputs.build_apk || inputs.build_aab }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working_directory }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: ${{ inputs.java_distribution }}
+          java-version: ${{ inputs.java_version }}
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: ${{ inputs.flutter_channel }}
+          cache: ${{ inputs.flutter_cache }}
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Flutter Doctor
+        if: ${{ inputs.run_flutter_doctor }}
+        run: flutter doctor -v
+
+      - name: Get packages
+        run: flutter pub get
+
+      - name: Build APK
+        if: ${{ inputs.build_apk && inputs.apk_build_cmd != '' }}
+        run: ${{ inputs.apk_build_cmd }}
+
+      - name: Build AAB
+        if: ${{ inputs.build_aab && inputs.aab_build_cmd != '' }}
+        run: ${{ inputs.aab_build_cmd }}
+
+  ios:
+    name: iOS
+    runs-on: ${{ inputs.ios_runner }}
+    needs: integrate
+    if: ${{ inputs.build_ios }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working_directory }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: ${{ inputs.flutter_channel }}
+          cache: ${{ inputs.flutter_cache }}
+
+      - name: Setup CocoaPods
+        if: ${{ inputs.ios_pod_install }}
+        run: |
+          sudo gem install cocoapods --no-document
+          cd ios && pod install --repo-update || true
+
+      - name: Get packages
+        run: flutter pub get
+
+      - name: Build IPA
+        if: ${{ inputs.ios_build_cmd != '' }}
+        run: ${{ inputs.ios_build_cmd }}
+
+  web:
+    name: Web
+    runs-on: ${{ inputs.web_runner }}
+    needs: integrate
+    if: ${{ inputs.build_web }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working_directory }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: ${{ inputs.flutter_channel }}
+          cache: ${{ inputs.flutter_cache }}
+
+      - name: Get packages
+        run: flutter pub get
+
+      - name: Build Web
+        if: ${{ inputs.web_build_cmd != '' }}
+        run: ${{ inputs.web_build_cmd }}
