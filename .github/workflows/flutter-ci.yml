@@ -172,7 +172,7 @@ jobs:
           cache: ${{ inputs.flutter_cache }}
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
 
       - name: Flutter Doctor
         if: ${{ inputs.run_flutter_doctor }}
