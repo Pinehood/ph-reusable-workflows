@@ -149,19 +149,23 @@ jobs:
         working-directory: ${{ inputs.working_directory }}
     steps:
       - name: Checkout
+        timeout-minutes: 1
         uses: actions/checkout@v6
 
       - name: Setup PNPM
+        timeout-minutes: 1
         if: ${{ inputs.package_manager == 'pnpm' }}
         uses: pnpm/action-setup@v6
         with:
           version: ${{ inputs.pnpm_version }}
 
       - name: Setup NPM
+        timeout-minutes: 1
         if: ${{ inputs.package_manager == 'npm' && inputs.npm_version != '' }}
         run: npm install --global npm@${{ inputs.npm_version }}
 
       - name: Setup Node.js
+        timeout-minutes: 1
         if: ${{ inputs.cache_dependency_path == '' }}
         uses: actions/setup-node@v6
         with:
@@ -169,6 +173,7 @@ jobs:
           cache: ${{ inputs.package_manager }}
 
       - name: Setup Cached Node.js
+        timeout-minutes: 1
         if: ${{ inputs.cache_dependency_path != '' }}
         uses: actions/setup-node@v6
         with:
@@ -177,26 +182,31 @@ jobs:
           cache-dependency-path: ${{ inputs.cache_dependency_path }}
 
       - name: Install
+        timeout-minutes: 1
         run: ${{ inputs.install_cmd }}
 
       - name: Build
+        timeout-minutes: 1
         run: ${{ inputs.build_cmd }}
         env:
           NODE_OPTIONS: ${{ inputs.node_options }}
 
       - name: Lint
+        timeout-minutes: 1
         if: ${{ inputs.run_lint && inputs.lint_cmd != '' }}
         run: ${{ inputs.lint_cmd }}
         env:
           NODE_OPTIONS: ${{ inputs.node_options }}
 
       - name: Test
+        timeout-minutes: 5
         if: ${{ inputs.run_test && inputs.test_cmd != '' }}
         run: ${{ inputs.test_cmd }}
         env:
           NODE_OPTIONS: ${{ inputs.node_options }}
 
       - name: Additional
+        timeout-minutes: 5
         if: ${{ inputs.run_additional && inputs.additional_cmd != '' }}
         run: ${{ inputs.additional_cmd }}
         env:
@@ -209,16 +219,20 @@ jobs:
     if: ${{ inputs.docker_enabled && (github.event_name != 'pull_request' || inputs.build_on_pull_request) }}
     steps:
       - name: Checkout
+        timeout-minutes: 1
         uses: actions/checkout@v6
 
       - name: Setup QEMU
+        timeout-minutes: 1
         if: ${{ !contains(inputs.docker_runner, '-arm') }}
         uses: docker/setup-qemu-action@v4
 
       - name: Setup Buildx
+        timeout-minutes: 1
         uses: docker/setup-buildx-action@v4
 
       - name: Load Secrets
+        timeout-minutes: 1
         id: bitwarden
         uses: bitwarden/sm-action@v2.2.0
         with:
@@ -232,6 +246,7 @@ jobs:
             ${{ inputs.bw_docker_build_arg_secrets }}
 
       - name: Resolve Docker Metadata
+        timeout-minutes: 1
         id: meta
         shell: bash
         run: |
@@ -255,6 +270,7 @@ jobs:
           echo "aws_region=$aws_region" >> "$GITHUB_OUTPUT"
 
       - name: Configure AWS Credentials
+        timeout-minutes: 1
         uses: aws-actions/configure-aws-credentials@v6
         with:
           aws-access-key-id: ${{ steps.bitwarden.outputs.AWS_ACCESS_KEY_ID }}
@@ -262,11 +278,13 @@ jobs:
           aws-region: ${{ steps.meta.outputs.aws_region }}
 
       - name: Login to AWS ECR
+        timeout-minutes: 1
         uses: aws-actions/amazon-ecr-login@v2
         with:
           mask-password: "true"
 
       - name: Resolve Docker Build Args
+        timeout-minutes: 1
         id: build_args
         uses: Pinehood/ph-reusable-workflows/.github/actions/resolve-docker-build-args@main
         with:
@@ -275,6 +293,7 @@ jobs:
           bw_outputs_json: ${{ toJson(steps.bitwarden.outputs) }}
 
       - name: Build & Push Docker Image
+        timeout-minutes: 10
         uses: docker/build-push-action@v7
         with:
           context: ${{ inputs.docker_context }}

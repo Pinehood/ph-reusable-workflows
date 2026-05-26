@@ -128,22 +128,27 @@ jobs:
         working-directory: ${{ inputs.working_directory }}
     steps:
       - name: Checkout
+        timeout-minutes: 1
         uses: actions/checkout@v6
 
       - name: Setup Flutter
+        timeout-minutes: 1
         uses: subosito/flutter-action@v2
         with:
           channel: ${{ inputs.flutter_channel }}
           cache: ${{ inputs.flutter_cache }}
 
       - name: Get packages
+        timeout-minutes: 1
         run: flutter pub get
 
       - name: Analyze
+        timeout-minutes: 5
         if: ${{ inputs.run_analyze && inputs.analyze_cmd != '' }}
         run: ${{ inputs.analyze_cmd }}
 
       - name: Test
+        timeout-minutes: 5
         if: ${{ inputs.run_test && inputs.test_cmd != '' }}
         run: ${{ inputs.test_cmd }}
 
@@ -157,35 +162,43 @@ jobs:
         working-directory: ${{ inputs.working_directory }}
     steps:
       - name: Checkout
+        timeout-minutes: 1
         uses: actions/checkout@v6
 
       - name: Setup Java
+        timeout-minutes: 1
         uses: actions/setup-java@v5
         with:
           distribution: ${{ inputs.java_distribution }}
           java-version: ${{ inputs.java_version }}
 
       - name: Setup Flutter
+        timeout-minutes: 1
         uses: subosito/flutter-action@v2
         with:
           channel: ${{ inputs.flutter_channel }}
           cache: ${{ inputs.flutter_cache }}
 
       - name: Setup Android SDK
+        timeout-minutes: 1
         uses: android-actions/setup-android@v4
 
       - name: Flutter Doctor
+        timeout-minutes: 5
         if: ${{ inputs.run_flutter_doctor }}
         run: flutter doctor -v
 
       - name: Get packages
+        timeout-minutes: 1
         run: flutter pub get
 
       - name: Build APK
+        timeout-minutes: 10
         if: ${{ inputs.build_apk && inputs.apk_build_cmd != '' }}
         run: ${{ inputs.apk_build_cmd }}
 
       - name: Build AAB
+        timeout-minutes: 10
         if: ${{ inputs.build_aab && inputs.aab_build_cmd != '' }}
         run: ${{ inputs.aab_build_cmd }}
 
@@ -199,24 +212,29 @@ jobs:
         working-directory: ${{ inputs.working_directory }}
     steps:
       - name: Checkout
+        timeout-minutes: 1
         uses: actions/checkout@v6
 
       - name: Setup Flutter
+        timeout-minutes: 1
         uses: subosito/flutter-action@v2
         with:
           channel: ${{ inputs.flutter_channel }}
           cache: ${{ inputs.flutter_cache }}
 
       - name: Setup CocoaPods
+        timeout-minutes: 2
         if: ${{ inputs.ios_pod_install }}
         run: |
           sudo gem install cocoapods --no-document
           cd ios && pod install --repo-update || true
 
       - name: Get packages
+        timeout-minutes: 1
         run: flutter pub get
 
       - name: Build IPA
+        timeout-minutes: 10
         if: ${{ inputs.ios_build_cmd != '' }}
         run: ${{ inputs.ios_build_cmd }}
 
@@ -230,17 +248,21 @@ jobs:
         working-directory: ${{ inputs.working_directory }}
     steps:
       - name: Checkout
+        timeout-minutes: 1
         uses: actions/checkout@v6
 
       - name: Setup Flutter
+        timeout-minutes: 1
         uses: subosito/flutter-action@v2
         with:
           channel: ${{ inputs.flutter_channel }}
           cache: ${{ inputs.flutter_cache }}
 
       - name: Get packages
+        timeout-minutes: 1
         run: flutter pub get
 
       - name: Build Web
+        timeout-minutes: 10
         if: ${{ inputs.web_build_cmd != '' }}
         run: ${{ inputs.web_build_cmd }}
