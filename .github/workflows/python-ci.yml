@@ -1,10 +1,10 @@
-name: Continuous Integration - Java
+name: Continuous Integration - Python
 
 on:
   workflow_call:
     inputs:
       runner:
-        description: "Runner used for the build/verify job"
+        description: "Runner used for the install/build/verify job"
         required: false
         type: string
         default: "ubuntu-latest"
@@ -14,40 +14,55 @@ on:
         type: string
         default: "ubuntu-latest"
       working_directory:
-        description: "Directory where Java commands should run"
+        description: "Directory where Python commands should run"
         required: false
         type: string
         default: "."
-      java_version:
-        description: "Java version"
+      python_version:
+        description: "Python version"
         required: false
         type: string
-        default: "21"
-      java_distribution:
-        description: "Java distribution"
+        default: "3.12"
+      python_cache:
+        description: "Dependency cache type for setup-python"
         required: false
         type: string
-        default: "temurin"
-      java_cache:
-        description: "Dependency cache type for setup-java"
+        default: "pip"
+      cache_dependency_path:
+        description: "Optional dependency lockfile path used for cache scoping"
         required: false
         type: string
-        default: "maven"
+        default: ""
+      install_cmd:
+        description: "Install command"
+        required: false
+        type: string
+        default: "make install"
       build_cmd:
         description: "Build command"
         required: false
         type: string
-        default: "mvn -B -q compile"
-      run_verify:
+        default: "make build"
+      run_check:
         description: "Run code quality/verification stage"
         required: false
         type: boolean
         default: false
-      verify_cmd:
-        description: "Verification command"
+      check_cmd:
+        description: "Check command"
         required: false
         type: string
-        default: "mvn -B -q verify -DskipTests"
+        default: "make check"
+      run_lint:
+        description: "Run lint stage"
+        required: false
+        type: boolean
+        default: false
+      lint_cmd:
+        description: "Lint command"
+        required: false
+        type: string
+        default: "ruff check ."
       run_test:
         description: "Run test stage"
         required: false
@@ -57,7 +72,7 @@ on:
         description: "Test command"
         required: false
         type: string
-        default: "mvn -B test"
+        default: "pytest"
       run_additional:
         description: "Run an additional project-specific stage"
         required: false
@@ -161,7 +176,7 @@ on:
 
 jobs:
   integrate:
-    name: Build & Verify
+    name: Install, Build & Verify
     runs-on: ${{ inputs.runner }}
     defaults:
       run:
@@ -172,22 +187,42 @@ jobs:
         timeout-minutes: 1
         uses: actions/checkout@v6
 
-      - name: Setup Java
+      - name: Setup Python
         timeout-minutes: 1
-        uses: actions/setup-java@v5
+        if: ${{ inputs.cache_dependency_path == '' }}
+        uses: actions/setup-python@v5
         with:
-          distribution: ${{ inputs.java_distribution }}
-          java-version: ${{ inputs.java_version }}
-          cache: ${{ inputs.java_cache }}
+          python-version: ${{ inputs.python_version }}
+          cache: ${{ inputs.python_cache }}
+
+      - name: Setup Cached Python
+        timeout-minutes: 1
+        if: ${{ inputs.cache_dependency_path != '' }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python_version }}
+          cache: ${{ inputs.python_cache }}
+          cache-dependency-path: ${{ inputs.cache_dependency_path }}
+
+      - name: Install
+        timeout-minutes: 5
+        if: ${{ inputs.install_cmd != '' }}
+        run: ${{ inputs.install_cmd }}
 
       - name: Build
-        timeout-minutes: 1
+        timeout-minutes: 5
+        if: ${{ inputs.build_cmd != '' }}
         run: ${{ inputs.build_cmd }}
 
-      - name: Verify
-        timeout-minutes: 1
-        if: ${{ inputs.run_verify && inputs.verify_cmd != '' }}
-        run: ${{ inputs.verify_cmd }}
+      - name: Check
+        timeout-minutes: 5
+        if: ${{ inputs.run_check && inputs.check_cmd != '' }}
+        run: ${{ inputs.check_cmd }}
+
+      - name: Lint
+        timeout-minutes: 5
+        if: ${{ inputs.run_lint && inputs.lint_cmd != '' }}
+        run: ${{ inputs.lint_cmd }}
 
       - name: Test
         timeout-minutes: 5
@@ -209,17 +244,25 @@ jobs:
         timeout-minutes: 1
         uses: actions/checkout@v6
 
-      - name: Setup Java
+      - name: Setup Python
         timeout-minutes: 1
-        if: ${{ inputs.package_cmd != '' }}
-        uses: actions/setup-java@v5
+        if: ${{ inputs.package_cmd != '' && inputs.cache_dependency_path == '' }}
+        uses: actions/setup-python@v5
         with:
-          distribution: ${{ inputs.java_distribution }}
-          java-version: ${{ inputs.java_version }}
-          cache: ${{ inputs.java_cache }}
+          python-version: ${{ inputs.python_version }}
+          cache: ${{ inputs.python_cache }}
+
+      - name: Setup Cached Python
+        timeout-minutes: 1
+        if: ${{ inputs.package_cmd != '' && inputs.cache_dependency_path != '' }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python_version }}
+          cache: ${{ inputs.python_cache }}
+          cache-dependency-path: ${{ inputs.cache_dependency_path }}
 
       - name: Package
-        timeout-minutes: 1
+        timeout-minutes: 5
         if: ${{ inputs.package_cmd != '' }}
         shell: bash
         working-directory: ${{ inputs.working_directory }}
