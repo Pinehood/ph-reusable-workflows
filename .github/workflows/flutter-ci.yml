@@ -357,6 +357,36 @@ jobs:
         if: ${{ inputs.ios_build_cmd != '' }}
         run: ${{ inputs.ios_build_cmd }}
 
+      - name: Package Unsigned IPA
+        timeout-minutes: 5
+        if: ${{ inputs.upload_to_nexus && (github.event_name != 'pull_request' || inputs.build_on_pull_request) }}
+        shell: bash
+        run: |
+          shopt -s nullglob
+          ipas=( build/ios/ipa/*.ipa )
+          if [ ${#ipas[@]} -gt 0 ]; then
+            echo "IPA already exists: ${ipas[0]}"
+            exit 0
+          fi
+
+          apps=( build/ios/archive/*.xcarchive/Products/Applications/*.app )
+          if [ ${#apps[@]} -eq 0 ]; then
+            echo "::error::No .app found under build/ios/archive/*.xcarchive/Products/Applications"
+            exit 1
+          fi
+
+          app="${apps[0]}"
+          echo "Packaging '$app' into unsigned IPA"
+
+          staging="$(mktemp -d)"
+          mkdir "$staging/Payload"
+          cp -R "$app" "$staging/Payload/"
+
+          mkdir -p build/ios/ipa
+          (cd "$staging" && zip -qry app-release.ipa Payload)
+          mv "$staging/app-release.ipa" build/ios/ipa/app-release.ipa
+          echo "Created build/ios/ipa/app-release.ipa"
+
       - name: Resolve Ref Tag
         timeout-minutes: 1
         id: ref
