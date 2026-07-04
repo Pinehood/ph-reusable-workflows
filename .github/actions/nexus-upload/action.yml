@@ -1,0 +1,52 @@
+name: Upload Artifact to Nexus
+
+inputs:
+  nexus_url:
+    description: Nexus base URL
+    required: true
+  nexus_repository:
+    description: Nexus raw hosted repository name
+    required: true
+  artifact_path:
+    description: Path or glob to the artifact file to upload
+    required: true
+  upload_path:
+    description: Destination directory inside the Nexus repository; the artifact file name is appended
+    required: true
+  username:
+    description: Nexus username
+    required: true
+  password:
+    description: Nexus password
+    required: true
+  working_directory:
+    description: Directory the artifact path is relative to
+    required: false
+    default: "."
+
+runs:
+  using: composite
+  steps:
+    - name: Upload to Nexus
+      shell: bash
+      working-directory: ${{ inputs.working_directory }}
+      env:
+        NEXUS_USERNAME: ${{ inputs.username }}
+        NEXUS_PASSWORD: ${{ inputs.password }}
+      run: |
+        shopt -s nullglob
+        matches=( ${{ inputs.artifact_path }} )
+
+        if [ ${#matches[@]} -eq 0 ]; then
+          echo "::error::No artifact found matching '${{ inputs.artifact_path }}'"
+          exit 1
+        fi
+
+        artifact="${matches[0]}"
+        url="${{ inputs.nexus_url }}/repository/${{ inputs.nexus_repository }}/${{ inputs.upload_path }}/$(basename "$artifact")"
+
+        echo "Uploading '$artifact' to '$url'"
+        curl --fail --silent --show-error \
+          --user "$NEXUS_USERNAME:$NEXUS_PASSWORD" \
+          --upload-file "$artifact" \
+          "$url"

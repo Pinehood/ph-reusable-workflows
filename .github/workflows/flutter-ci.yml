@@ -74,15 +74,10 @@ on:
         type: string
         default: "flutter test"
       build_web:
-        description: "Build web release"
+        description: "Build and push web Docker image"
         required: false
         type: boolean
-        default: true
-      web_build_cmd:
-        description: "Web build command"
-        required: false
-        type: string
-        default: "flutter build web --release"
+        default: false
       build_apk:
         description: "Build Android APK"
         required: false
@@ -118,6 +113,86 @@ on:
         required: false
         type: string
         default: "flutter build ipa --release --no-codesign"
+      build_on_pull_request:
+        description: "Also build/push web Docker image and upload binaries on pull requests"
+        required: false
+        type: boolean
+        default: false
+      docker_context:
+        description: "Docker build context for the web image"
+        required: false
+        type: string
+        default: "."
+      dockerfile:
+        description: "Dockerfile path for the web image"
+        required: false
+        type: string
+        default: "./Dockerfile"
+      image_name:
+        description: "Logical image name; defaults to repository name"
+        required: false
+        type: string
+        default: ""
+      ecr_repository:
+        description: "ECR repository name; defaults to image_name"
+        required: false
+        type: string
+        default: ""
+      image_tag_prefix:
+        description: "Tag prefix used before the branch name"
+        required: false
+        type: string
+        default: "latest"
+      docker_platforms:
+        description: "Target Docker platforms"
+        required: false
+        type: string
+        default: "linux/arm64"
+      docker_build_args:
+        description: "Additional docker buildx arguments"
+        required: false
+        type: string
+        default: ""
+      bw_docker_build_arg_secrets:
+        description: "Optional Bitwarden secret ID to Docker build arg name mappings, one per line: <secret-id> > <BUILD_ARG_NAME>"
+        required: false
+        type: string
+        default: ""
+      upload_to_nexus:
+        description: "Upload built APK/AAB/IPA binaries to Nexus"
+        required: false
+        type: boolean
+        default: false
+      nexus_url:
+        description: "Nexus base URL"
+        required: false
+        type: string
+        default: "https://nexus.pinehood.tech"
+      nexus_repository:
+        description: "Nexus raw hosted repository name used for binary uploads"
+        required: false
+        type: string
+        default: "binaries"
+      apk_artifact_path:
+        description: "Path (or glob) to the built APK, relative to the working directory"
+        required: false
+        type: string
+        default: "build/app/outputs/flutter-apk/app-release.apk"
+      aab_artifact_path:
+        description: "Path (or glob) to the built AAB, relative to the working directory"
+        required: false
+        type: string
+        default: "build/app/outputs/bundle/release/app-release.aab"
+      ipa_artifact_path:
+        description: "Path (or glob) to the built IPA, relative to the working directory"
+        required: false
+        type: string
+        default: "build/ios/ipa/*.ipa"
+      bw_cloud_region:
+        description: "Bitwarden cloud region"
+        required: false
+        type: string
+        default: "eu""
 
 jobs:
   integrate:
@@ -202,6 +277,43 @@ jobs:
         if: ${{ inputs.build_aab && inputs.aab_build_cmd != '' }}
         run: ${{ inputs.aab_build_cmd }}
 
+      - name: Load Secrets
+        timeout-minutes: 1
+        id: bitwarden
+        if: ${{ inputs.upload_to_nexus && (github.event_name != 'pull_request' || inputs.build_on_pull_request) }}
+        uses: bitwarden/sm-action@v2.2.0
+        with:
+          access_token: ${{ secrets.BW_ACCESS_TOKEN }}
+          cloud_region: ${{ inputs.bw_cloud_region }}
+          secrets: |
+            be76b5af-afa5-477b-a6bd-b47d0132a929 > NEXUS_PASSWORD
+
+      - name: Upload APK to Nexus
+        timeout-minutes: 5
+        if: ${{ inputs.build_apk && inputs.upload_to_nexus && (github.event_name != 'pull_request' || inputs.build_on_pull_request) }}
+        uses: Pinehood/ph-reusable-workflows/.github/actions/nexus-upload@main
+        with:
+          nexus_url: ${{ inputs.nexus_url }}
+          nexus_repository: ${{ inputs.nexus_repository }}
+          artifact_path: ${{ inputs.apk_artifact_path }}
+          upload_path: ${{ github.event.repository.name }}/android/apk/${{ github.ref_name }}/${{ github.run_number }}
+          username: admin
+          password: ${{ steps.bitwarden.outputs.NEXUS_PASSWORD }}
+          working_directory: ${{ inputs.working_directory }}
+
+      - name: Upload AAB to Nexus
+        timeout-minutes: 5
+        if: ${{ inputs.build_aab && inputs.upload_to_nexus && (github.event_name != 'pull_request' || inputs.build_on_pull_request) }}
+        uses: Pinehood/ph-reusable-workflows/.github/actions/nexus-upload@main
+        with:
+          nexus_url: ${{ inputs.nexus_url }}
+          nexus_repository: ${{ inputs.nexus_repository }}
+          artifact_path: ${{ inputs.aab_artifact_path }}
+          upload_path: ${{ github.event.repository.name }}/android/aab/${{ github.ref_name }}/${{ github.run_number }}
+          username: admin
+          password: ${{ steps.bitwarden.outputs.NEXUS_PASSWORD }}
+          working_directory: ${{ inputs.working_directory }}
+
   ios:
     name: iOS
     runs-on: ${{ inputs.ios_runner }}
@@ -238,31 +350,119 @@ jobs:
         if: ${{ inputs.ios_build_cmd != '' }}
         run: ${{ inputs.ios_build_cmd }}
 
+      - name: Load Secrets
+        timeout-minutes: 1
+        id: bitwarden
+        if: ${{ inputs.upload_to_nexus && (github.event_name != 'pull_request' || inputs.build_on_pull_request) }}
+        uses: bitwarden/sm-action@v2.2.0
+        with:
+          access_token: ${{ secrets.BW_ACCESS_TOKEN }}
+          cloud_region: ${{ inputs.bw_cloud_region }}
+          secrets: |
+            be76b5af-afa5-477b-a6bd-b47d0132a929 > NEXUS_PASSWORD
+
+      - name: Upload IPA to Nexus
+        timeout-minutes: 5
+        if: ${{ inputs.upload_to_nexus && (github.event_name != 'pull_request' || inputs.build_on_pull_request) }}
+        uses: Pinehood/ph-reusable-workflows/.github/actions/nexus-upload@main
+        with:
+          nexus_url: ${{ inputs.nexus_url }}
+          nexus_repository: ${{ inputs.nexus_repository }}
+          artifact_path: ${{ inputs.ipa_artifact_path }}
+          upload_path: ${{ github.event.repository.name }}/ios/ipa/${{ github.ref_name }}/${{ github.run_number }}
+          username: admin
+          password: ${{ steps.bitwarden.outputs.NEXUS_PASSWORD }}
+          working_directory: ${{ inputs.working_directory }}
+
   web:
     name: Web
     runs-on: ${{ inputs.web_runner }}
     needs: integrate
-    if: ${{ inputs.build_web }}
-    defaults:
-      run:
-        working-directory: ${{ inputs.working_directory }}
+    if: ${{ inputs.build_web && (github.event_name != 'pull_request' || inputs.build_on_pull_request) }}
     steps:
       - name: Checkout
         timeout-minutes: 1
         uses: actions/checkout@v6
 
-      - name: Setup Flutter
+      - name: Setup QEMU
         timeout-minutes: 1
-        uses: subosito/flutter-action@v2
+        if: ${{ !contains(inputs.web_runner, '-arm') }}
+        uses: docker/setup-qemu-action@v4
+
+      - name: Setup Buildx
+        timeout-minutes: 1
+        uses: docker/setup-buildx-action@v4
+
+      - name: Load Secrets
+        timeout-minutes: 1
+        id: bitwarden
+        uses: bitwarden/sm-action@v2.2.0
         with:
-          channel: ${{ inputs.flutter_channel }}
-          cache: ${{ inputs.flutter_cache }}
+          access_token: ${{ secrets.BW_ACCESS_TOKEN }}
+          cloud_region: ${{ inputs.bw_cloud_region }}
+          secrets: |
+            e7c6fc64-87b1-45dd-9420-b41400a2e518 > AWS_ACCESS_KEY_ID
+            e2765187-2097-4382-bbc3-b41400a2f529 > AWS_SECRET_ACCESS_KEY
+            238f1f37-baac-4158-b673-b41400a30d2f > AWS_REGION
+            d49acdfd-f59d-4260-ba03-b41400a2d594 > AWS_ECR_REGISTRY
+            ${{ inputs.bw_docker_build_arg_secrets }}
 
-      - name: Get packages
+      - name: Resolve Docker Metadata
         timeout-minutes: 1
-        run: flutter pub get
+        id: meta
+        shell: bash
+        run: |
+          repo_name="${GITHUB_REPOSITORY#*/}"
+          image_name="${{ inputs.image_name }}"
+          ecr_repository="${{ inputs.ecr_repository }}"
+          ecr_registry="${{ steps.bitwarden.outputs.AWS_ECR_REGISTRY }}"
+          aws_region="${{ steps.bitwarden.outputs.AWS_REGION }}"
 
-      - name: Build Web
-        timeout-minutes: 10
-        if: ${{ inputs.web_build_cmd != '' }}
-        run: ${{ inputs.web_build_cmd }}
+          if [ -z "$image_name" ]; then
+            image_name="$repo_name"
+          fi
+
+          if [ -z "$ecr_repository" ]; then
+            ecr_repository="$image_name"
+          fi
+
+          {
+            echo "image_name=$image_name"
+            echo "ecr_repository=$ecr_repository"
+            echo "ecr_registry=$ecr_registry"
+            echo "aws_region=$aws_region"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS Credentials
+        timeout-minutes: 1
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-access-key-id: ${{ steps.bitwarden.outputs.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ steps.bitwarden.outputs.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ steps.meta.outputs.aws_region }}
+
+      - name: Login to AWS ECR
+        timeout-minutes: 1
+        uses: aws-actions/amazon-ecr-login@v2
+        with:
+          mask-password: "true"
+
+      - name: Resolve Docker Build Args
+        timeout-minutes: 1
+        id: build_args
+        uses: Pinehood/ph-reusable-workflows/.github/actions/resolve-docker-build-args@main
+        with:
+          docker_build_args: ${{ inputs.docker_build_args }}
+          bw_docker_build_arg_secrets: ${{ inputs.bw_docker_build_arg_secrets }}
+          bw_outputs_json: ${{ toJson(steps.bitwarden.outputs) }}
+
+      - name: Build & Push Docker Image
+        timeout-minutes: 15
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ inputs.docker_context }}
+          file: ${{ inputs.dockerfile }}
+          platforms: ${{ inputs.docker_platforms }}
+          push: true
+          tags: ${{ steps.meta.outputs.ecr_registry }}/${{ steps.meta.outputs.ecr_repository }}:${{ inputs.image_tag_prefix }}-${{ github.ref_name }}
+          build-args: ${{ steps.build_args.outputs.build_args }}
