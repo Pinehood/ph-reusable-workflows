@@ -192,7 +192,7 @@ on:
         description: "Bitwarden cloud region"
         required: false
         type: string
-        default: "eu""
+        default: "eu"
 
 jobs:
   integrate:
