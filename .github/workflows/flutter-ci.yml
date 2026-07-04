@@ -277,6 +277,13 @@ jobs:
         if: ${{ inputs.build_aab && inputs.aab_build_cmd != '' }}
         run: ${{ inputs.aab_build_cmd }}
 
+      - name: Resolve Ref Tag
+        timeout-minutes: 1
+        id: ref
+        if: ${{ inputs.upload_to_nexus && (github.event_name != 'pull_request' || inputs.build_on_pull_request) }}
+        shell: bash
+        run: echo "ref_tag=${GITHUB_REF_NAME//\//-}" >> "$GITHUB_OUTPUT"
+
       - name: Load Secrets
         timeout-minutes: 1
         id: bitwarden
@@ -296,7 +303,7 @@ jobs:
           nexus_url: ${{ inputs.nexus_url }}
           nexus_repository: ${{ inputs.nexus_repository }}
           artifact_path: ${{ inputs.apk_artifact_path }}
-          upload_path: ${{ github.event.repository.name }}/android/apk/${{ github.ref_name }}/${{ github.run_number }}
+          upload_path: ${{ github.event.repository.name }}/android/apk/${{ steps.ref.outputs.ref_tag }}/${{ github.run_number }}
           username: admin
           password: ${{ steps.bitwarden.outputs.NEXUS_PASSWORD }}
           working_directory: ${{ inputs.working_directory }}
@@ -309,7 +316,7 @@ jobs:
           nexus_url: ${{ inputs.nexus_url }}
           nexus_repository: ${{ inputs.nexus_repository }}
           artifact_path: ${{ inputs.aab_artifact_path }}
-          upload_path: ${{ github.event.repository.name }}/android/aab/${{ github.ref_name }}/${{ github.run_number }}
+          upload_path: ${{ github.event.repository.name }}/android/aab/${{ steps.ref.outputs.ref_tag }}/${{ github.run_number }}
           username: admin
           password: ${{ steps.bitwarden.outputs.NEXUS_PASSWORD }}
           working_directory: ${{ inputs.working_directory }}
@@ -350,6 +357,13 @@ jobs:
         if: ${{ inputs.ios_build_cmd != '' }}
         run: ${{ inputs.ios_build_cmd }}
 
+      - name: Resolve Ref Tag
+        timeout-minutes: 1
+        id: ref
+        if: ${{ inputs.upload_to_nexus && (github.event_name != 'pull_request' || inputs.build_on_pull_request) }}
+        shell: bash
+        run: echo "ref_tag=${GITHUB_REF_NAME//\//-}" >> "$GITHUB_OUTPUT"
+
       - name: Load Secrets
         timeout-minutes: 1
         id: bitwarden
@@ -369,7 +383,7 @@ jobs:
           nexus_url: ${{ inputs.nexus_url }}
           nexus_repository: ${{ inputs.nexus_repository }}
           artifact_path: ${{ inputs.ipa_artifact_path }}
-          upload_path: ${{ github.event.repository.name }}/ios/ipa/${{ github.ref_name }}/${{ github.run_number }}
+          upload_path: ${{ github.event.repository.name }}/ios/ipa/${{ steps.ref.outputs.ref_tag }}/${{ github.run_number }}
           username: admin
           password: ${{ steps.bitwarden.outputs.NEXUS_PASSWORD }}
           working_directory: ${{ inputs.working_directory }}
