@@ -248,7 +248,7 @@ jobs:
           java-version: ${{ inputs.java_version }}
 
       - name: Setup Flutter
-        timeout-minutes: 1
+        timeout-minutes: 5
         uses: subosito/flutter-action@v2
         with:
           channel: ${{ inputs.flutter_channel }}
@@ -328,7 +328,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Setup Flutter
-        timeout-minutes: 1
+        timeout-minutes: 5
         uses: subosito/flutter-action@v2
         with:
           channel: ${{ inputs.flutter_channel }}
@@ -417,6 +417,7 @@ jobs:
           ecr_repository="${{ inputs.ecr_repository }}"
           ecr_registry="${{ steps.bitwarden.outputs.AWS_ECR_REGISTRY }}"
           aws_region="${{ steps.bitwarden.outputs.AWS_REGION }}"
+          ref_tag="${GITHUB_REF_NAME//\//-}"
 
           if [ -z "$image_name" ]; then
             image_name="$repo_name"
@@ -431,6 +432,7 @@ jobs:
             echo "ecr_repository=$ecr_repository"
             echo "ecr_registry=$ecr_registry"
             echo "aws_region=$aws_region"
+            echo "ref_tag=$ref_tag"
           } >> "$GITHUB_OUTPUT"
 
       - name: Configure AWS Credentials
@@ -464,5 +466,5 @@ jobs:
           file: ${{ inputs.dockerfile }}
           platforms: ${{ inputs.docker_platforms }}
           push: true
-          tags: ${{ steps.meta.outputs.ecr_registry }}/${{ steps.meta.outputs.ecr_repository }}:${{ inputs.image_tag_prefix }}-${{ github.ref_name }}
+          tags: ${{ steps.meta.outputs.ecr_registry }}/${{ steps.meta.outputs.ecr_repository }}:${{ inputs.image_tag_prefix }}-${{ steps.meta.outputs.ref_tag }}
           build-args: ${{ steps.build_args.outputs.build_args }}
