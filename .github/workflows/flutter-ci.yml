@@ -268,12 +268,12 @@ jobs:
         run: flutter pub get
 
       - name: Build APK
-        timeout-minutes: 10
+        timeout-minutes: 15
         if: ${{ inputs.build_apk && inputs.apk_build_cmd != '' }}
         run: ${{ inputs.apk_build_cmd }}
 
       - name: Build AAB
-        timeout-minutes: 10
+        timeout-minutes: 15
         if: ${{ inputs.build_aab && inputs.aab_build_cmd != '' }}
         run: ${{ inputs.aab_build_cmd }}
 
@@ -353,7 +353,7 @@ jobs:
         run: flutter pub get
 
       - name: Build IPA
-        timeout-minutes: 10
+        timeout-minutes: 15
         if: ${{ inputs.ios_build_cmd != '' }}
         run: ${{ inputs.ios_build_cmd }}
 
