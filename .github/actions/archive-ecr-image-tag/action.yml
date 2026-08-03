@@ -1,0 +1,79 @@
+name: Archive ECR Image Tag
+
+inputs:
+  ecr_repository:
+    description: ECR repository name
+    required: true
+  image_tag:
+    description: Image tag to archive if it already exists
+    required: true
+
+outputs:
+  archived:
+    description: Whether an existing image was archived
+    value: ${{ steps.archive.outputs.archived }}
+  archive_tag:
+    description: Timestamped tag used for the archived image, if archived
+    value: ${{ steps.archive.outputs.archive_tag }}
+
+runs:
+  using: composite
+  steps:
+    - name: Archive Previous ECR Image Tag
+      id: archive
+      shell: bash
+      env:
+        ECR_REPOSITORY: ${{ inputs.ecr_repository }}
+        IMAGE_TAG: ${{ inputs.image_tag }}
+      run: |
+        set -euo pipefail
+
+        repository="$ECR_REPOSITORY"
+        image_tag="$IMAGE_TAG"
+        timestamp="$(date -u +%Y%m%d%H%M%S)"
+        archive_tag="${image_tag}-${timestamp}"
+
+        manifest="$(aws ecr batch-get-image \
+          --repository-name "$repository" \
+          --image-ids "imageTag=${image_tag}" \
+          --query 'images[0].imageManifest' \
+          --output text)"
+
+        if [ -z "$manifest" ] || [ "$manifest" = "None" ]; then
+          failure_code="$(aws ecr batch-get-image \
+            --repository-name "$repository" \
+            --image-ids "imageTag=${image_tag}" \
+            --query 'failures[0].failureCode' \
+            --output text)"
+
+          if [ "$failure_code" = "ImageNotFound" ]; then
+            echo "No existing image with tag ${image_tag}; skipping archive."
+            echo "archived=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Failed to retrieve manifest for ${image_tag} (ECR failure: ${failure_code})." >&2
+          exit 1
+        fi
+
+        media_type="$(aws ecr batch-get-image \
+          --repository-name "$repository" \
+          --image-ids "imageTag=${image_tag}" \
+          --query 'images[0].imageManifestMediaType' \
+          --output text)"
+
+        put_image_args=(
+          --repository-name "$repository"
+          --image-tag "$archive_tag"
+          --image-manifest "$manifest"
+        )
+
+        if [ -n "$media_type" ] && [ "$media_type" != "None" ]; then
+          put_image_args+=(--image-manifest-media-type "$media_type")
+        fi
+
+        aws ecr put-image "${put_image_args[@]}" >/dev/null
+
+        echo "Archived ${image_tag} as ${archive_tag}"
+        echo "archived=true" >> "$GITHUB_OUTPUT"
+        echo "archive_tag=${archive_tag}" >> "$GITHUB_OUTPUT"

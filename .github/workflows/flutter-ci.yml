@@ -502,6 +502,14 @@ jobs:
           bw_docker_build_arg_secrets: ${{ inputs.bw_docker_build_arg_secrets }}
           bw_outputs_json: ${{ toJson(steps.bitwarden.outputs) }}
 
+      - name: Archive Previous Docker Image Tag
+        timeout-minutes: 2
+        continue-on-error: true
+        uses: Pinehood/ph-reusable-workflows/.github/actions/archive-ecr-image-tag@main
+        with:
+          ecr_repository: ${{ steps.meta.outputs.ecr_repository }}
+          image_tag: ${{ inputs.image_tag_prefix }}-${{ steps.meta.outputs.ref_tag }}
+
       - name: Build & Push Docker Image
         timeout-minutes: 15
         uses: docker/build-push-action@v7
