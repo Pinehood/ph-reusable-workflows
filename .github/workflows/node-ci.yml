@@ -294,6 +294,22 @@ jobs:
           bw_docker_build_arg_secrets: ${{ inputs.bw_docker_build_arg_secrets }}
           bw_outputs_json: ${{ toJson(steps.bitwarden.outputs) }}
 
+      - name: Resolve Docker Platforms
+        timeout-minutes: 1
+        id: platforms
+        shell: bash
+        run: |
+          raw="${{ inputs.docker_platforms }}"
+          normalized="$(echo "$raw" | tr -d '[:space:]')"
+          normalized="${normalized//linux\/x86_64/linux\/amd64}"
+          normalized="${normalized//linux\/aarch64/linux\/arm64}"
+
+          if [ -z "$normalized" ]; then
+            normalized="linux/arm64"
+          fi
+
+          echo "platforms=$normalized" >> "$GITHUB_OUTPUT"
+
       - name: Archive Previous Docker Image Tag
         timeout-minutes: 2
         continue-on-error: true
@@ -308,7 +324,7 @@ jobs:
         with:
           context: ${{ inputs.docker_context }}
           file: ${{ inputs.dockerfile }}
-          platforms: ${{ inputs.docker_platforms }}
+          platforms: ${{ steps.platforms.outputs.platforms }}
           push: true
           tags: ${{ steps.meta.outputs.ecr_registry }}/${{ steps.meta.outputs.ecr_repository }}:${{ inputs.image_tag_prefix }}-${{ steps.meta.outputs.ref_tag }}
           build-args: ${{ steps.build_args.outputs.build_args }}
