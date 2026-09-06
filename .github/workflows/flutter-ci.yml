@@ -534,5 +534,6 @@ jobs:
           file: ${{ inputs.dockerfile }}
           platforms: ${{ steps.platforms.outputs.platforms }}
           push: true
+          provenance: false
           tags: ${{ steps.meta.outputs.ecr_registry }}/${{ steps.meta.outputs.ecr_repository }}:${{ inputs.image_tag_prefix }}-${{ steps.meta.outputs.ref_tag }}
           build-args: ${{ steps.build_args.outputs.build_args }}
