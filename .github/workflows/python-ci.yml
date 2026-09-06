@@ -301,7 +301,13 @@ jobs:
           ecr_repository="${{ inputs.ecr_repository }}"
           ecr_registry="${{ steps.bitwarden.outputs.AWS_ECR_REGISTRY }}"
           aws_region="${{ steps.bitwarden.outputs.AWS_REGION }}"
-          ref_tag="${GITHUB_REF_NAME//\//-}"
+          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+            ref_src="${GITHUB_HEAD_REF}"
+          else
+            ref_src="${GITHUB_REF_NAME}"
+          fi
+          ref_tag="${ref_src//\//-}"
+          ref_tag="$(printf '%s' "$ref_tag" | tr -c 'a-zA-Z0-9._-' '-')"
 
           if [ -z "$image_name" ]; then
             image_name="$repo_name"
